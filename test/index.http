@@ -1,0 +1,105 @@
+@authToken = Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2N2QyYzVkMTRiNDhjZjUwNzczZDU0MjUiLCJpYXQiOjE3NDE4ODA1ODgsImV4cCI6MTc0MTg4Nzc4OH0.D8lDDL0hTzIE1RT2kMNQ686XiG7Agoe07xTn78YgOhY
+@authToken2 = Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2N2QyZmQyYzlmN2NjZWYzMTBmMzk3M2EiLCJpYXQiOjE3NDE4ODA2MjgsImV4cCI6MTc0MTg4NzgyOH0.O9Gb0HlX8MPRj_fVwbxsgaFFdQn0PzXVdx0Mv4IEY2o
+###
+GET http://localhost:3000/api/user/profile
+Authorization: {{authToken2}}
+###
+POST http://localhost:3000/api/user/register
+Content-Type: application/json
+
+{
+    "email": "ignacio@gmail.com",
+    "password": "123456789",
+    "firstName": "Ignacio",
+    "lastName": "Da Silva"
+}
+
+###
+PUT http://localhost:3000/api/user/verify
+Authorization: Bearer {{authToken2}}
+Content-Type: application/json
+
+{
+    "email": "ignacio@gmail.com",
+    "code": "2855"
+}
+
+### 
+POST http://localhost:3000/api/user/login
+Content-Type: application/json
+
+{
+    "email": "pedro@gmail.com",
+    "password": "pedroContraseña"
+}
+
+###
+PATCH http://localhost:3000/api/user
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+    "firstName": "Pedro",
+    "lastName": "Morera",
+    "paquita": "Paquita"
+}
+
+###
+PATCH http://localhost:3000/api/user/company
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+    "company": {
+        "name": "Servitop, SL.",
+        "cif": "BXXXXXXXX",
+        "street": "Carlos V",
+        "number": 22,
+        "postal": 28936,
+        "city": "Móstoles",
+        "province": "Madrid"
+    }
+}
+###
+PATCH http://localhost:3000/api/user/logos
+Authorization: Bearer {{authToken}}
+Content-Type: multipart/form-data; boundary=Boundry
+
+--Boundry
+Content-Disposition: form-data; name="image"; filename="img.png"
+Content-Type: application/png
+
+< ./img.png
+--Boundry--
+
+###
+DELETE http://localhost:3000/api/user
+Authorization: {{authToken}}
+
+###
+POST http://localhost:3000/api/user/recover
+Content-Type: application/json
+
+{
+    "email": "pedro@gmail.com"
+}
+
+###
+PATCH  http://localhost:3000/api/user/recover
+Content-Type: application/json
+
+{
+    "email": "pedro@gmail.com",
+    "code": "6302",
+    "password": "pedroContraseña"
+}
+
+###
+PATCH http://localhost:3000/api/user/invite
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+    "email": "ignacio@gmail.com",
+    "role": "admin"
+}
