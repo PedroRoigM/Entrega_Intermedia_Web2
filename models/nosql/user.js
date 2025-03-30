@@ -125,7 +125,7 @@ userSchema.index({ 'email': 1 }, { unique: true })
 userSchema.index({ 'company.name': 1 }, { unique: true })
 userSchema.index({ 'company.cif': 1 }, { unique: true })
 
-Schema.plugin(mongooseDelete, { overrideMethods: "all" }) // Soft delete
+userSchema.plugin(mongooseDelete, { overrideMethods: "all" }) // Soft delete
 
 // Sí el código de verificación aún persiste y no ha expirado, para luego comprobar si es válido
 userSchema.methods.isVerificationCodeValid = function () {

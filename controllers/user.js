@@ -1,260 +1,270 @@
 /**
-* Obtener lista de la base de datos
-* @param {*} req
-* @param {*} res
-*/
+ * Controladores para operaciones de usuario
+ */
 const { matchedData } = require('express-validator');
-const { encrypt, compare } = require("../utils/handlePassword")
-const { userModel } = require("../models")
-const { tokenSign } = require("../utils/handleJwt")
-const { handleHttpError } = require("../utils/handleError")
-const uploadToPinata = require('../utils/UploadToPinata')
-const pinata_gateway_url = process.env.PINATA_GATEWAY_URL
+const { handleHttpError } = require("../utils/handleError");
+const userService = require('../services/user.service');
 
+/**
+ * Obtener los datos del usuario autenticado
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
 const getUser = async (req, res) => {
     res.json(req.user);
-}
+};
+
+/**
+ * Registrar un nuevo usuario
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
 const registerUser = async (req, res) => {
     try {
-        req = matchedData(req)
-
-        const password = await encrypt(req.password)
-        // Crear un codigo aleatorio para verificar el email
-        const code = (Math.floor(Math.random() * (9999 - 1000) + 1000)).toString()
-        // Crear un objeto con los datos del usuario
-        const body = { ...req, password, code }
-        // Verificar si el email ya existe
-        const user = await userModel.findOne({ email: req.email })
-        if (user) {
-            if (user.validated) {
-                handleHttpError(res, "EMAIL_ALREADY_EXISTS", 409)
-                return
-            }
-            dataUser = await userModel.findOneAndUpdate({ email: req.email }, body, { new: true })
-
-        } else {
-            // Crear un nuevo usuario en la base de datos
-            let dataUser = await userModel.create(body)
-        }
-        if (dataUser) {
-            dataUser.set("password", undefined, { strict: false })
-        }
-        const data = {
-            token: tokenSign(dataUser),
-            user: dataUser
-        }
-        res.send(data)
-    } catch (err) {
-        console.log(err)
-        handleHttpError(res, "ERROR_LOGIN_USER")
+        const userData = matchedData(req);
+        const result = await userService.register(userData);
+        res.send(result);
+    } catch (error) {
+        console.log(error);
+        // Pasar el error directamente, handleHttpError se encargará de extraer status y mensaje
+        handleHttpError(res, error);
     }
 };
+
+/**
+ * Verificar correo electrónico
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
 const verifyEmail = async (req, res) => {
     try {
-        const { email } = req.body
-
-        const user = await userModel.findOne({ email })
-        if (!user) {
-            handleHttpError(res, "USER_NOT_EXISTS", 404)
-            return
-        }
-        if (user.validated) {
-            handleHttpError(res, "EMAIL_ALREADY_VALLIDATED", 400)
-            return
-        }
-        // Verificar el email
-        const { code } = req.body
-
-        if (user.code !== code) {
-            handleHttpError(res, "INVALID_CODE", 400)
-        } else {
-            user.validated = true
-            user.code = undefined
-            await user.save()
-            res.send({ message: "EMAIL_VALIDATED" })
-        }
+        const { email, code } = req.body;
+        const result = await userService.verifyEmail(email, code);
+        res.send(result);
+    } catch (error) {
+        console.log(error);
+        // Pasar el error directamente
+        handleHttpError(res, error);
     }
-    catch (err) {
-        handleHttpError(res, "ERROR_VALIDATING_EMAIL")
-    }
-}
+};
 
+/**
+ * Login de usuario
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
 const loginUser = async (req, res) => {
     try {
-        req = matchedData(req)
-        const user = await userModel.findOne({ email: req.email }).select("password name email validated")
-        if (!user) {
-            handleHttpError(res, "USER_NOT_EXISTS", 404)
-            return
-        }
-        // Si no esta verificado el email
-        console.log(user.validated)
-        if (!user.validated) {
-            handleHttpError(res, "EMAIL_NOT_VALIDATED", 401)
-            return
-        }
-        const hashPassword = user.password
-        const check = await compare(req.password, hashPassword)
-        if (!check) {
-            handleHttpError(res, "INVALID_PASSWORD", 401)
-            return
-        }
-        user.set("password", undefined, { strict: false })
-        const data = {
-            token: await tokenSign(user),
-            user
-        }
-        res.send(data)
-    } catch (err) {
-        handleHttpError(res, "ERROR_LOGIN_USER")
+        const { email, password } = matchedData(req);
+        const result = await userService.login(email, password);
+        res.send(result);
+    } catch (error) {
+        // Usar el código de estado del error, o 500 por defecto
+        const status = error.status || 500;
+        const message = error.message || "ERROR_LOGIN_USER";
+        handleHttpError(res, message, status);
     }
-}
+};
+
+
+/**
+ * Actualizar información del usuario
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
 const patchUser = async (req, res) => {
     try {
-        const user = req.user
-        const data = req.body
-        const response = await userModel.findByIdAndUpdate(user._id, { $set: data }, { new: true })
-
-        return res.send(response)
-    }
-    catch (err) {
-        console.log(err)
-        handleHttpError(res, "ERROR_PATCH_USER")
+        const { _id } = req.user;
+        const userData = req.body;
+        const result = await userService.updateUser(_id, userData);
+        res.send(result);
+    } catch (error) {
+        console.log(error);
+        // Pasar el error directamente
+        handleHttpError(res, error);
     }
 };
+
+/**
+ * Actualizar información de la empresa
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
 const patchCompany = async (req, res) => {
     try {
-        const user = req.user
-        const data = req.body
-        const response = await userModel.findByIdAndUpdate(user._id, { $set: { company: data } }, { new: true })
+        const user = req.user;
+        const { company } = req.body;
 
-        return res.send(response)
-    }
-    catch (err) {
-        console.log(err)
-        handleHttpError(res, "ERROR_PATCH_COMPANY")
+        if (!company) {
+            return handleHttpError(res, "COMPANY_DATA_REQUIRED", 400);
+        }
+
+        console.log('Company data received:', company);
+
+        // Verificar si hay conflictos con nombre o CIF de compañía
+        if (company.name || company.cif) {
+            const nameExists = company.name && await userModel.findOne({
+                'company.name': company.name,
+                _id: { $ne: user._id }
+            });
+
+            const cifExists = company.cif && await userModel.findOne({
+                'company.cif': company.cif,
+                _id: { $ne: user._id }
+            });
+
+            if (nameExists) {
+                return handleHttpError(res, "COMPANY_NAME_ALREADY_EXISTS", 409);
+            }
+
+            if (cifExists) {
+                return handleHttpError(res, "COMPANY_CIF_ALREADY_EXISTS", 409);
+            }
+        }
+
+        // Actualizar la compañía
+        const updatedUser = await userModel.findByIdAndUpdate(
+            user._id,
+            { $set: { company } },
+            { new: true }
+        );
+
+        // Devolver solo la respuesta que espera el test
+        return res.send(updatedUser);
+    } catch (err) {
+        console.log('Error updating company:', err);
+        handleHttpError(res, "ERROR_PATCH_COMPANY", 500);
     }
 };
 
+
+/**
+ * Actualizar logo de la empresa
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
 const patchLogo = async (req, res) => {
     try {
-        const user = req.user
-        const fileName = req.file.originalname
-        const fileBuffer = req.file.buffer
-        const pinataResponse = await uploadToPinata(fileBuffer, fileName)
-        const ipfsFile = pinataResponse.IpfsHash
-        const ipfs_url = `https://${pinata_gateway_url}/ipfs/${ipfsFile}`
-        const response = await userModel.findByIdAndUpdate(user._id, { $set: { logo: ipfs_url } }, { new: true })
-        return res.send(response)
-    } catch (err) {
-        console.log(err)
-        handleHttpError(res, "ERROR_PATCH_LOGO")
+        const { _id } = req.user;
+        const file = {
+            buffer: req.file.buffer,
+            originalname: req.file.originalname
+        };
+        const result = await userService.updateProfilePicture(_id, file);
+        res.send(result);
+    } catch (error) {
+        console.log(error);
+        // Pasar el error directamente
+        handleHttpError(res, error);
     }
 };
+
+/**
+ * Eliminar usuario (soft o hard delete)
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
 const deleteUser = async (req, res) => {
     try {
-        const user = req.user
-        const { soft } = req.query
-        if (soft === 'true') {
-            await userModel.delete({ _id: user._id })
-            res.send({ message: "USER_DELETED_SOFT" })
-            return
-        }
-        await userModel.findByIdAndDelete({ _id: user._id })
-        res.send({ message: "USER_DELETED" })
-    } catch (err) {
-        console.log(err)
-        handleHttpError(res, "ERROR_DELETE_USER")
+        const { _id } = req.user;
+        const { soft = 'true' } = req.query;
+        const isSoft = soft === 'true';
+        const result = await userService.deleteUser(_id, isSoft);
+        res.send(result);
+    } catch (error) {
+        console.log(error);
+        // Pasar el error directamente
+        handleHttpError(res, error);
     }
 };
 
+/**
+ * Crear código de recuperación de contraseña
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
 const createRecoverPasswordCode = async (req, res) => {
     try {
-        const { email } = req.body
-        const user = await userModel
-            .findOne({ email })
-            .select("email name")
-        if (!user) {
-            handleHttpError(res, "USER_NOT_EXISTS", 404)
-            return
-        }
-        const code = (Math.floor(Math.random() * (9999 - 1000) + 1000)).toString()
-        user.code = code
-        await user.save()
-        res.send({ message: "CODE_CREATED" })
+        const { email } = req.body;
+        const result = await userService.createRecoverCode(email);
+        res.send(result);
+    } catch (error) {
+        console.log(error);
+        // Pasar el error directamente
+        handleHttpError(res, error);
     }
-    catch (err) {
-        console.log(err)
-        handleHttpError(res, "ERROR_CREATE_CODE")
-    }
-}
+};
+
+/**
+ * Recuperar contraseña con código
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
 const recoverPassword = async (req, res) => {
     try {
-        const { email, code, password } = req.body
-        const user
-            = await userModel.findOne
-                ({ email })
-        if (!user) {
-            handleHttpError(res, "USER_NOT_EXISTS", 404)
-            return
-        }
-        if (user.code !== code) {
-            handleHttpError(res, "INVALID_CODE", 400)
-            return
-        }
-        user.code = undefined
-        user.password = await encrypt(password)
-        await user.save()
-        res.send({ message: "PASSWORD_UPDATED" })
+        const { email, code, password } = req.body;
+        const result = await userService.recoverPassword(email, code, password);
+        res.send(result);
+    } catch (error) {
+        console.log(error);
+        // Pasar el error directamente
+        handleHttpError(res, error);
     }
-    catch (err) {
-        console.log(err)
-        handleHttpError(res, "ERROR_RECOVER_PASSWORD")
-    }
-}
+};
 
+/**
+ * Invitar a otro usuario
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
 const patchInviteUser = async (req, res) => {
     try {
-        console.log(req.body)
-        const user = req.user
-        const invited = await userModel.find({ email: req.body.email })
-        await userModel.findByIdAndUpdate(invited._id, { $push: { invitations: { _id: user._id, email: user.email, role: req.body.role } } }, { new: true })
-        const response = await userModel.findByIdAndUpdate(user._id, { $push: { invited } }, { new: true })
-        return res.send(response)
+        const currentUser = req.user;
+        const { email, role } = req.body;
+        const result = await userService.inviteUser(currentUser, email, role);
+        res.send(result);
+    } catch (error) {
+        console.log(error);
+        // Pasar el error directamente
+        handleHttpError(res, error);
     }
-    catch (err) {
-        console.log(err)
-        handleHttpError(res, "ERROR_PATCH_INVITE_USER")
-    }
-}
+};
 
+/**
+ * Aceptar invitación de otro usuario
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
 const patchAcceptInviteUser = async (req, res) => {
     try {
-        const user = req.user
-        const { inviterId } = req.body
-        await userModel.findByIdAndUpdate(user._id, { $pull: { invited: { _id: inviterId } } }, { new: true })
-        const response = await userModel.findByIdAndUpdate(inviterId, { $push: { acceptedInvitations: { _id: user._id, email: user.email, role: user.role } } }, { new: true })
-
-        return res.send(response)
+        const currentUser = req.user;
+        const { inviterId } = req.body;
+        const result = await userService.acceptInvitation(currentUser, inviterId);
+        res.send(result);
+    } catch (error) {
+        console.log(error);
+        // Pasar el error directamente
+        handleHttpError(res, error);
     }
-    catch (err) {
-        console.log(err)
-        handleHttpError(res, "ERROR_PATCH_ACCEPT_INVITE_USER")
-    }
-}
+};
 
+/**
+ * Rechazar invitación de otro usuario
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
 const patchRejectInviteUser = async (req, res) => {
     try {
-        const user = req.user
-        const { inviterId } = req.body
-        const response = await userModel.findByIdAndUpdate(user._id, { $pull: { invited: { _id: inviterId } } }, { new: true })
-        return res.send(response)
+        const currentUser = req.user;
+        const { inviterId } = req.body;
+        const result = await userService.rejectInvitation(currentUser, inviterId);
+        res.send(result);
+    } catch (error) {
+        console.log(error);
+        // Pasar el error directamente
+        handleHttpError(res, error);
     }
-    catch (err) {
-        console.log(err)
-        handleHttpError(res, "ERROR_PATCH_REJECT_INVITE_USER")
-    }
-}
+};
 
 module.exports = {
     getUser,

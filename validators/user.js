@@ -41,22 +41,16 @@ const validatorCompanyPatch = [
     check('company.cif')
         .notEmpty().withMessage('Cif is required')
         .isLength({ min: 9 }).withMessage('Cif must be at least 9 characters long'),
-    check('company.street')
-        .notEmpty().withMessage('Street is required')
-        .isLength({ min: 3 }).withMessage('Street must be at least 3 characters long'),
-    check('company.number')
-        .notEmpty().withMessage('Number is required')
+    check('company.address').optional().isObject().withMessage('Address must be an object'),
+    check('company.address.street').optional()
+        .isString().withMessage('Street must be a string'),
+    check('company.address.number').optional()
         .isNumeric().withMessage('Number must be numeric'),
-    check('company.postal')
-        .notEmpty().withMessage('Postal is required')
+    check('company.address.postal').optional()
         .isNumeric().withMessage('Postal must be numeric'),
-    check('company.city')
-        .notEmpty().withMessage('City is required')
-        .isLength({ min: 3 }).withMessage('City must be at least 3 characters long'),
-    check('company.province')
-        .notEmpty().withMessage('Province is required')
-        .isLength({ min: 3 }).withMessage('Province must be at least 3 characters long'),
+    check('company.address.city').optional()
+        .isString().withMessage('City must be a string'),
     (req, res, next) => validateResults(req, res, next)
-
 ];
+
 module.exports = { validatorRegister, validatorLogin, validatorValidateEmail, validatorCompanyPatch };
