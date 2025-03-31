@@ -16,8 +16,8 @@ const port = config.port || 3000;
 app.use('/api', require("./routes"));
 morganBody(app, {
     noColors: true, //limpiamos el String de datos lo máximo posible antes de mandarlo a Slack
-    skip: function (req, res) { //Solo enviamos errores (4XX de cliente y 5XX de servidor)
-        return res.statusCode >= 500
+    skip: function (req, res) { //Solo enviamos errores 500 (errores del servidor)
+        return res.statusCode < 500
     },
     stream: loggerStream
 })

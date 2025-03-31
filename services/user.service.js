@@ -1,6 +1,6 @@
 const { encrypt, compare } = require('../utils/handlePassword')
 const { tokenSign } = require('../utils/handleJwt')
-const { updateToPinata } = require('../utils/UploadToPinata')
+const uploadToPinata = require('../utils/UploadToPinata')
 const pinata_gateway_url = process.env.PINATA_GATEWAY_URL
 const { createError } = require('../utils/handleError')
 const userModel = require('../models/nosql/user')
@@ -428,6 +428,15 @@ const inviteUser = async (currentUser, email, role) => {
         if (!invited) {
             throw createError('USER_NOT_EXISTS', 404);
         }
+        const existingInvitation = await userModel.findOne({
+            _id: invited._id,
+            'invitations.userId': currentUser._id,
+            'invitations.status': 'pending'
+        });
+
+        if (existingInvitation) {
+            throw createError('INVITATION_ALREADY_SENT', 409);
+        }
 
         // Crear una invitación
         const invitation = {
@@ -479,7 +488,12 @@ const acceptInvitation = async (currentUser, inviterId) => {
         await userModel.findByIdAndUpdate(currentUser._id, {
             $pull: { invitations: { userId: inviterId } }
         });
-
+        // Verificar si el usuario ya es partner
+        if (currentUser.company &&
+            currentUser.company.partners &&
+            currentUser.company.partners.some(p => p._id === inviterId)) {
+            throw createError('ALREADY_PARTNERS', 409);
+        }
         // Introducir al usuario en la lista de partners de la compañía
         const updatedUser = await userModel.findByIdAndUpdate(currentUser._id, {
             $push: {
@@ -489,7 +503,17 @@ const acceptInvitation = async (currentUser, inviterId) => {
                 }
             }
         }, { new: true });
-
+        // Actualizar también el estado en el usuario que invitó
+        await userModel.findByIdAndUpdate(
+            inviterId,
+            {
+                $set: { 'sentInvitations.$[elem].status': 'accepted' }
+            },
+            {
+                arrayFilters: [{ 'elem.userId': currentUser._id }],
+                new: true
+            }
+        );
         return updatedUser || { message: "INVITATION_ACCEPTED" };
     }
     catch (error) {
@@ -530,6 +554,18 @@ const rejectInvitation = async (currentUser, inviterId) => {
             },
             { new: true }
         );
+        // Actualizar estado de la invitación en el usuario que envió la invitación
+        await userModel.findByIdAndUpdate(
+            inviterId,
+            {
+                $set: { 'sentInvitations.$[elem].status': 'rejected' }
+            },
+            {
+                arrayFilters: [{ 'elem.userId': currentUser._id }],
+                new: true
+            }
+        );
+
 
         return updatedUser || { message: "INVITATION_REJECTED" };
     } catch (error) {
@@ -556,7 +592,7 @@ const updateProfilePicture = async (userId, file) => {
         }
 
         // Subir la imagen a Pinata
-        const { IpfsHash } = await updateToPinata(file);
+        const { IpfsHash } = await uploadToPinata(file, file.originalname);
 
         // Actualizar la URL de la imagen en el usuario
         const updatedUser = await userModel.findByIdAndUpdate(userId, {

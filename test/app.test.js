@@ -13,10 +13,27 @@ describe('User API', () => {
         "lastName": "Da Silva"
     };
 
+    // Emails para las pruebas de invitaciones
+    const inviterEmail = 'inviter@example.com';
+    const inviteeEmail = 'invitee@example.com';
+    let inviterToken, inviteeToken;
+    let inviterId, inviteeId;
+
     // Antes de todas las pruebas, limpiamos la base de datos
     beforeAll(async () => {
         // eliminar las pruebas de la base de datos
-        await userModel.deleteMany({ email: { $in: [testUser.email, 'unverified@example.com', 'invited@example.com'] } });
+        await userModel.deleteMany({
+            email: {
+                $in: [
+                    testUser.email,
+                    'unverified@example.com',
+                    'invited@example.com',
+                    inviterEmail,
+                    inviteeEmail,
+                    'invalid.login@test.com'
+                ]
+            }
+        });
     });
 
     // Después de todas las pruebas, limpiamos la base de datos
@@ -34,8 +51,7 @@ describe('User API', () => {
         expect(response.body.user.email).toEqual(testUser.email);
         expect(response.body.token).toBeDefined();
 
-        console.log('Token after registration:', response.body.token);
-        console.log('User ID:', response.body.user._id);
+
 
         token = response.body.token;
         userId = response.body.user._id;
@@ -43,7 +59,6 @@ describe('User API', () => {
     });
 
     it('should verify user email', async () => {
-        console.log('Verification code:', verificationCode);
         const response = await request(app)
             .put('/api/user/verify')
             .send({
@@ -68,14 +83,10 @@ describe('User API', () => {
 
         expect(response.body.user.email).toEqual(testUser.email);
         expect(response.body.token).toBeDefined();
-
-        console.log('Token after login:', response.body.token);
         token = response.body.token; // Actualizamos el token con el nuevo
     });
 
     it('should get user profile', async () => {
-        console.log('Token for profile:', token);
-
         // Intentar primero con formato exacto Bearer {token}
         const response = await request(app)
             .get('/api/user/profile')
@@ -94,7 +105,6 @@ describe('User API', () => {
             lastName: 'Name'
         };
 
-        console.log('Token for update:', token);
         const response = await request(app)
             .patch('/api/user')
             .send(updatedInfo)
@@ -114,8 +124,6 @@ describe('User API', () => {
             if (!company) {
                 return handleHttpError(res, "COMPANY_DATA_REQUIRED", 400);
             }
-
-            console.log('Company data received:', company);
 
             // Verificar si hay conflictos con nombre o CIF de compañía
             if (company.name || company.cif) {
@@ -148,7 +156,6 @@ describe('User API', () => {
             // Devolver solo la respuesta que espera el test
             return res.send(updatedUser);
         } catch (err) {
-            console.log('Error updating company:', err);
             handleHttpError(res, "ERROR_PATCH_COMPANY", 500);
         }
     };
@@ -202,7 +209,6 @@ describe('User API', () => {
         expect(response.body.user.email).toEqual(testUser.email);
         expect(response.body.token).toBeDefined();
 
-        console.log('Token after password change:', response.body.token);
         token = response.body.token;
     });
 
@@ -220,7 +226,6 @@ describe('User API', () => {
             .send(invitedUser)
             .set('Accept', 'application/json');
 
-        console.log('Token for invite:', token);
         const response = await request(app)
             .patch('/api/user/invite')
             .send({
@@ -235,7 +240,6 @@ describe('User API', () => {
     });
 
     it('should delete user (soft delete)', async () => {
-        console.log('Token for delete:', token);
         const response = await request(app)
             .delete('/api/user?soft=true')
             .set('Authorization', `Bearer ${token}`)
@@ -263,7 +267,6 @@ describe('User API', () => {
 
             // Verificar explícitamente que el usuario exista
             const registeredUser = await userModel.findOne({ email: testUserForInvalidLogin.email });
-            console.log('Created test user:', registeredUser ? registeredUser.email : 'not found');
 
             if (!registeredUser) {
                 throw new Error('Test user was not created properly');
@@ -277,11 +280,6 @@ describe('User API', () => {
             );
             // Verificar que la actualización fue exitosa para luego hacer el test
             const validatedUser = await userModel.findOne({ email: testUserForInvalidLogin.email });
-            console.log('Validated user:', {
-                email: validatedUser.email,
-                validated: validatedUser.validated,
-                accountValidated: validatedUser.accountStatus?.validated
-            });
 
             // Intentar iniciar sesión con la contraseña incorrecta
             const response = await request(app)
@@ -292,12 +290,10 @@ describe('User API', () => {
                 })
                 .set('Accept', 'application/json');
 
-            console.log('Login with wrong password response:', response.status, response.body);
 
             expect(response.status).toBe(401);
             expect(response.body.error).toEqual('INVALID_PASSWORD');
         } catch (error) {
-            console.error('Test error:', error);
             throw error;
         }
     });
@@ -340,5 +336,211 @@ describe('User API', () => {
             .expect(404);
 
         expect(response.body.error).toEqual('USER_NOT_EXISTS');
+    });
+    describe('Invitation functionality', () => {
+        // Configuración para pruebas de invitaciones
+        beforeAll(async () => {
+            // Crear usuarios para las pruebas de invitaciones
+            const inviterUser = {
+                firstName: 'Inviter',
+                lastName: 'User',
+                email: inviterEmail,
+                password: 'Password123'
+            };
+
+            const inviteeUser = {
+                firstName: 'Invitee',
+                lastName: 'User',
+                email: inviteeEmail,
+                password: 'Password123'
+            };
+
+            // Registrar usuario invitador
+            const inviterResponse = await request(app)
+                .post('/api/user/register')
+                .send(inviterUser)
+                .set('Accept', 'application/json');
+
+            // Verificar usuario invitador
+            await userModel.findOneAndUpdate(
+                { email: inviterEmail },
+                {
+                    'accountStatus.validated': true,
+                    'validated': true
+                }
+            );
+
+            // Registrar usuario invitado
+            const inviteeResponse = await request(app)
+                .post('/api/user/register')
+                .send(inviteeUser)
+                .set('Accept', 'application/json');
+
+            // Verificar usuario invitado
+            await userModel.findOneAndUpdate(
+                { email: inviteeEmail },
+                {
+                    'accountStatus.validated': true,
+                    'validated': true
+                }
+            );
+
+            // Login de usuario invitador
+            const loginInviterResponse = await request(app)
+                .post('/api/user/login')
+                .send({
+                    email: inviterEmail,
+                    password: 'Password123'
+                })
+                .set('Accept', 'application/json');
+
+            inviterToken = loginInviterResponse.body.token;
+
+            // Login de usuario invitado
+            const loginInviteeResponse = await request(app)
+                .post('/api/user/login')
+                .send({
+                    email: inviteeEmail,
+                    password: 'Password123'
+                })
+                .set('Accept', 'application/json');
+
+            inviteeToken = loginInviteeResponse.body.token;
+
+            // Obtener IDs
+            const inviter = await userModel.findOne({ email: inviterEmail });
+            const invitee = await userModel.findOne({ email: inviteeEmail });
+
+            inviterId = inviter._id;
+            inviteeId = invitee._id;
+        }, 30000); // Aumentar timeout para esta configuración
+
+        it('should send an invitation successfully', async () => {
+            const response = await request(app)
+                .patch('/api/user/invite')
+                .send({
+                    email: inviteeEmail,
+                    role: 'admin'
+                })
+                .set('Authorization', `Bearer ${inviterToken}`)
+                .set('Accept', 'application/json');
+
+            expect(response.status).toBe(200);
+
+            // Verificar que la invitación se guardó
+            const updatedInviter = await userModel.findById(inviterId);
+            const updatedInvitee = await userModel.findById(inviteeId);
+
+            expect(updatedInviter.sentInvitations.length).toBeGreaterThan(0);
+            expect(updatedInvitee.invitations.length).toBeGreaterThan(0);
+        });
+
+        it('should handle inviting a non-existent user', async () => {
+            const response = await request(app)
+                .patch('/api/user/invite')
+                .send({
+                    email: 'nonexistent_user@example.com',
+                    role: 'user'
+                })
+                .set('Authorization', `Bearer ${inviterToken}`)
+                .set('Accept', 'application/json');
+
+            expect(response.status).toBe(404);
+            expect(response.body.error).toEqual('USER_NOT_EXISTS');
+        });
+
+        it('should accept an invitation successfully', async () => {
+            const response = await request(app)
+                .patch('/api/user/invite/accept')
+                .send({
+                    inviterId: inviterId.toString()
+                })
+                .set('Authorization', `Bearer ${inviteeToken}`)
+                .set('Accept', 'application/json');
+
+            expect(response.status).toBe(200);
+
+            // Verificar que la invitación fue procesada correctamente
+            const updatedInvitee = await userModel.findById(inviteeId);
+
+            // La invitación debe haber sido eliminada o modificada
+            const hasInvitation = updatedInvitee.invitations.some(
+                inv => inv.userId.toString() === inviterId.toString() && inv.status === 'pending'
+            );
+
+            expect(hasInvitation).toBe(false);
+
+            // El usuario debe tener al invitador como partner
+            const isPartner = updatedInvitee.company &&
+                updatedInvitee.company.partners &&
+                updatedInvitee.company.partners.some(
+                    partner => partner._id === inviterId.toString()
+                );
+
+            expect(isPartner).toBe(true);
+        });
+
+        it('should handle accepting a non-existent invitation', async () => {
+            // Usar un ID de MongoDB válido pero que no corresponde a ninguna invitación
+            const randomId = new mongoose.Types.ObjectId().toString();
+
+            const response = await request(app)
+                .patch('/api/user/invite/accept')
+                .send({
+                    inviterId: randomId
+                })
+                .set('Authorization', `Bearer ${inviteeToken}`)
+                .set('Accept', 'application/json');
+
+            expect(response.status).toBe(404);
+            expect(response.body.error).toEqual('INVITATION_NOT_EXISTS');
+        });
+
+        it('should send and reject an invitation successfully', async () => {
+            // Enviar una nueva invitación
+            await request(app)
+                .patch('/api/user/invite')
+                .send({
+                    email: inviteeEmail,
+                    role: 'user'
+                })
+                .set('Authorization', `Bearer ${inviterToken}`)
+                .set('Accept', 'application/json');
+
+            // Rechazar la invitación
+            const response = await request(app)
+                .patch('/api/user/invite/reject')
+                .send({
+                    inviterId: inviterId.toString()
+                })
+                .set('Authorization', `Bearer ${inviteeToken}`)
+                .set('Accept', 'application/json');
+
+            expect(response.status).toBe(200);
+
+            // Verificar que la invitación fue eliminada
+            const updatedInvitee = await userModel.findById(inviteeId);
+            const hasInvitation = updatedInvitee.invitations &&
+                updatedInvitee.invitations.some(
+                    inv => inv.userId.toString() === inviterId.toString()
+                );
+
+            expect(hasInvitation).toBe(false);
+        });
+
+        it('should handle rejecting a non-existent invitation', async () => {
+            const randomId = new mongoose.Types.ObjectId().toString();
+
+            const response = await request(app)
+                .patch('/api/user/invite/reject')
+                .send({
+                    inviterId: randomId
+                })
+                .set('Authorization', `Bearer ${inviteeToken}`)
+                .set('Accept', 'application/json');
+
+            expect(response.status).toBe(404);
+            expect(response.body.error).toEqual('INVITATION_NOT_FOUND');
+        });
     });
 });

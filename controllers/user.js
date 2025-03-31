@@ -95,42 +95,10 @@ const patchCompany = async (req, res) => {
         const user = req.user;
         const { company } = req.body;
 
-        if (!company) {
-            return handleHttpError(res, "COMPANY_DATA_REQUIRED", 400);
-        }
-
-        console.log('Company data received:', company);
-
-        // Verificar si hay conflictos con nombre o CIF de compañía
-        if (company.name || company.cif) {
-            const nameExists = company.name && await userModel.findOne({
-                'company.name': company.name,
-                _id: { $ne: user._id }
-            });
-
-            const cifExists = company.cif && await userModel.findOne({
-                'company.cif': company.cif,
-                _id: { $ne: user._id }
-            });
-
-            if (nameExists) {
-                return handleHttpError(res, "COMPANY_NAME_ALREADY_EXISTS", 409);
-            }
-
-            if (cifExists) {
-                return handleHttpError(res, "COMPANY_CIF_ALREADY_EXISTS", 409);
-            }
-        }
-
-        // Actualizar la compañía
-        const updatedUser = await userModel.findByIdAndUpdate(
-            user._id,
-            { $set: { company } },
-            { new: true }
-        );
+        const data = userService.updateCompany(user._id, company);
 
         // Devolver solo la respuesta que espera el test
-        return res.send(updatedUser);
+        return res.send(data);
     } catch (err) {
         console.log('Error updating company:', err);
         handleHttpError(res, "ERROR_PATCH_COMPANY", 500);
