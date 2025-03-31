@@ -1,5 +1,5 @@
 @baseUrl = http://localhost:3000/api
-@inviterEmail = inviter@example.com
+@inviterEmail = inviter@gmail.com
 @inviteeEmail = invitee@example.com
 @password = Password123
 
@@ -15,7 +15,7 @@ Content-Type: application/json
 }
 
 ### Guardar código de verificación del primer usuario
-@inviterVerificationCode = 3181
+@inviterVerificationCode = 8720
 
 ### Verificar email del primer usuario
 PUT {{baseUrl}}/user/verify
@@ -195,7 +195,7 @@ Content-Type: application/json
 }
 
 ### Guardar código de recuperación
-@recoveryCode = 3185
+@recoveryCode = 4120
 
 ### Cambiar contraseña
 PATCH {{baseUrl}}/user/recover

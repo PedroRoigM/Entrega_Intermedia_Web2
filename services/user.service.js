@@ -4,17 +4,42 @@ const uploadToPinata = require('../utils/UploadToPinata')
 const pinata_gateway_url = process.env.PINATA_GATEWAY_URL
 const { createError } = require('../utils/handleError')
 const userModel = require('../models/nosql/user')
-
+const { sendEmail } = require('../utils/handleMails')
 /*
     * Genera un código de verificación de 4 dígitos y lo devuelve junto con la fecha de expiración
     * @returns {Object} - Código de verificación y fecha de expiración
 */
-const generateVerificationCode = () => {
+const generateVerificationCode = (email) => {
     const code = (Math.floor(Math.random() * (9999 - 1000) + 1000)).toString()
     // El código expirará en 5 minutos
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000)
     return { code, expiresAt }
 };
+
+/*
+* Manda por correo un código de verificación al usuario
+* @param {string} email - Email del usuario
+* @param {string} code - Código de verificación
+* @returns {Promise<void>} - Mensaje de éxito
+*/
+const sendVerificationCode = async (email, code) => {
+    try {
+        // Crear el objeto de correo
+        const mailOptions = {
+            from: process.env.EMAIL,
+            to: email,
+            subject: 'Código de verificación',
+            text: `Tu código de verificación es: ${code}`
+        };
+
+        // Enviar el correo
+        await sendEmail(mailOptions);
+        console.log(`Código de verificación enviado a ${email}`);
+    } catch (error) {
+        console.error('Error al enviar el código de verificación:', error)
+        throw createError('ERROR_SENDING_VERIFICATION_CODE', 500)
+    }
+}
 
 /*
     * Obtiene los datos de un usuario por su ID
@@ -93,6 +118,9 @@ const register = async (userData) => {
             dataUser.set("password", undefined, { strict: false })
         }
         dataUser.set("code", code, { strict: false })
+
+        // Enviamos el código de verificación al email del usuario
+        await sendVerificationCode(email, code)
         return {
             token: tokenSign(dataUser),
             user: dataUser
@@ -344,6 +372,9 @@ const createRecoverCode = async (email) => {
         }
 
         await user.save();
+
+        // Enviar el código al email del usuario
+        await sendVerificationCode(email, code);
 
         return {
             message: "RECOVER_CODE_CREATED",
