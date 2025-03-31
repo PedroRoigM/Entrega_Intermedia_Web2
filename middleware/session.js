@@ -28,11 +28,14 @@ const authMiddleware = async (req, res, next) => {
         }
 
         // Si la ruta no es 'verify', verificar que el usuario esté validado
-        if (req.url !== '/verify') {
+        const bypassRoutes = ['/verify', '/recover'];
+        const shouldCheckValidation = !bypassRoutes.some(route => req.url.includes(route));
+
+        if (shouldCheckValidation) {
             // Comprobar si el usuario tiene la propiedad accountStatus o validated directamente
-            const isValidated = user.accountStatus
+            const isValidated = user.accountStatus && typeof user.accountStatus.validated === 'boolean'
                 ? user.accountStatus.validated
-                : user.validated;
+                : (typeof user.validated === 'boolean' ? user.validated : false);
 
             if (!isValidated) {
                 handleHttpError(res, "EMAIL_NOT_VALIDATED", 401)

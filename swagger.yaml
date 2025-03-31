@@ -1,0 +1,880 @@
+openapi: 3.0.0
+info:
+  title: User Management API
+  description: API para gestión de usuarios, compañías e invitaciones
+  version: 1.0.0
+  contact:
+    email: admin@example.com
+servers:
+  - url: http://localhost:3000/api
+    description: Servidor local de desarrollo
+tags:
+  - name: Authentication
+    description: Operaciones de autenticación y gestión de sesiones
+  - name: User
+    description: Operaciones de gestión de usuarios
+  - name: Company
+    description: Operaciones de gestión de empresas
+  - name: Invitation
+    description: Operaciones de gestión de invitaciones entre usuarios
+  - name: Recovery
+    description: Operaciones de recuperación de contraseña
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        _id:
+          type: string
+          format: ObjectId
+          example: 60d21b4667d0d8992e610c85
+        firstName:
+          type: string
+          example: John
+        lastName:
+          type: string
+          example: Doe
+        email:
+          type: string
+          format: email
+          example: john.doe@example.com
+        password:
+          type: string
+          format: password
+          example: Password123
+        company:
+          $ref: "#/components/schemas/Company"
+        invitations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Invitation"
+        sentInvitations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Invitation"
+        acceptedInvitations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Invitation"
+        validated:
+          type: boolean
+          example: true
+        logo:
+          type: string
+          example: https://gateway.pinata.cloud/ipfs/QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco
+        accountStatus:
+          $ref: "#/components/schemas/AccountStatus"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2023-01-01T00:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2023-01-01T00:00:00Z"
+      required:
+        - firstName
+        - lastName
+        - email
+        - password
+
+    AccountStatus:
+      type: object
+      properties:
+        validated:
+          type: boolean
+          example: true
+        active:
+          type: boolean
+          example: true
+        verificationCode:
+          type: string
+          example: "1234"
+        codeExpiration:
+          type: string
+          format: date-time
+          example: "2023-01-01T00:10:00Z"
+        passwordResetCode:
+          type: string
+          example: "5678"
+        passwordResetExpiration:
+          type: string
+          format: date-time
+          example: "2023-01-01T00:10:00Z"
+        loginAttempts:
+          type: integer
+          example: 0
+        lastLoginAttempt:
+          type: string
+          format: date-time
+          example: "2023-01-01T00:00:00Z"
+
+    Company:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Acme Inc.
+        cif:
+          type: string
+          example: B12345678
+        address:
+          $ref: "#/components/schemas/Address"
+        partners:
+          type: array
+          items:
+            $ref: "#/components/schemas/Partner"
+
+    Address:
+      type: object
+      properties:
+        street:
+          type: string
+          example: Calle Principal
+        number:
+          type: integer
+          example: 123
+        postal:
+          type: integer
+          example: 28001
+        city:
+          type: string
+          example: Madrid
+
+    Partner:
+      type: object
+      properties:
+        _id:
+          type: string
+          format: ObjectId
+          example: 60d21b4667d0d8992e610c85
+        role:
+          type: string
+          enum: [invited, admin, user]
+          example: admin
+      required:
+        - _id
+        - role
+
+    Invitation:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: ObjectId
+          example: 60d21b4667d0d8992e610c85
+        email:
+          type: string
+          format: email
+          example: john.doe@example.com
+        role:
+          type: string
+          enum: [invited, admin, user]
+          example: admin
+        status:
+          type: string
+          enum: [pending, accepted, rejected]
+          example: pending
+      required:
+        - userId
+        - email
+
+    TokenResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        user:
+          $ref: "#/components/schemas/User"
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: SUCCESS
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: ERROR_MESSAGE
+
+paths:
+  /user/register:
+    post:
+      tags:
+        - Authentication
+      summary: Registrar un nuevo usuario
+      description: Registra un nuevo usuario en el sistema y envía un código de verificación por email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                firstName:
+                  type: string
+                  example: John
+                lastName:
+                  type: string
+                  example: Doe
+                email:
+                  type: string
+                  format: email
+                  example: john.doe@example.com
+                password:
+                  type: string
+                  format: password
+                  example: Password123
+              required:
+                - firstName
+                - lastName
+                - email
+                - password
+      responses:
+        "200":
+          description: Usuario registrado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "409":
+          description: Email ya registrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Datos de entrada inválidos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        msg:
+                          type: string
+                        param:
+                          type: string
+                        location:
+                          type: string
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /user/verify:
+    put:
+      tags:
+        - Authentication
+      summary: Verificar email de usuario
+      description: Verifica el email del usuario mediante un código enviado
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: john.doe@example.com
+                code:
+                  type: string
+                  example: "1234"
+              required:
+                - email
+                - code
+      responses:
+        "200":
+          description: Email verificado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Código inválido o expirado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Usuario no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Datos de entrada inválidos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: object
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /user/login:
+    post:
+      tags:
+        - Authentication
+      summary: Iniciar sesión
+      description: Autentica al usuario y devuelve un token JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: john.doe@example.com
+                password:
+                  type: string
+                  format: password
+                  example: Password123
+              required:
+                - email
+                - password
+      responses:
+        "200":
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          description: Email o contraseña incorrectos, o cuenta no verificada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Usuario no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Datos de entrada inválidos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: object
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /user/profile:
+    get:
+      tags:
+        - User
+      summary: Obtener perfil de usuario
+      description: Obtiene el perfil del usuario autenticado
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Perfil del usuario
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: No autorizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Usuario no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /user:
+    patch:
+      tags:
+        - User
+      summary: Actualizar información del usuario
+      description: Actualiza la información básica del usuario autenticado
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                firstName:
+                  type: string
+                  example: John
+                lastName:
+                  type: string
+                  example: Doe
+      responses:
+        "200":
+          description: Usuario actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: No autorizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Usuario no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags:
+        - User
+      summary: Eliminar usuario
+      description: Elimina el usuario autenticado (soft delete por defecto)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: soft
+          schema:
+            type: string
+            enum: [true, false]
+            default: "true"
+          description: Si es true, realiza un soft delete; si es false, realiza un hard delete
+      responses:
+        "200":
+          description: Usuario eliminado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          description: No autorizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Usuario no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /user/company:
+    patch:
+      tags:
+        - Company
+      summary: Actualizar información de la empresa
+      description: Actualiza la información de la empresa del usuario autenticado
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                company:
+                  $ref: "#/components/schemas/Company"
+              required:
+                - company
+      responses:
+        "200":
+          description: Información de empresa actualizada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Datos de empresa requeridos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: No autorizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflicto con nombre o CIF de empresa existente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Datos de entrada inválidos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: object
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /user/logo:
+    patch:
+      tags:
+        - User
+      summary: Actualizar logo del usuario
+      description: Actualiza el logo o imagen de perfil del usuario autenticado
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+              required:
+                - image
+      responses:
+        "200":
+          description: Logo actualizado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: No autorizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Usuario no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /user/invite:
+    patch:
+      tags:
+        - Invitation
+      summary: Invitar a un usuario
+      description: Envía una invitación a otro usuario para colaborar
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: invited@example.com
+                role:
+                  type: string
+                  enum: [invited, admin, user]
+                  default: user
+                  example: admin
+              required:
+                - email
+      responses:
+        "200":
+          description: Invitación enviada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: No autorizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Usuario invitado no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Invitación ya enviada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /user/invite/accept:
+    patch:
+      tags:
+        - Invitation
+      summary: Aceptar invitación
+      description: Acepta una invitación recibida de otro usuario
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                inviterId:
+                  type: string
+                  format: ObjectId
+                  example: 60d21b4667d0d8992e610c85
+              required:
+                - inviterId
+      responses:
+        "200":
+          description: Invitación aceptada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: No autorizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Invitación no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Ya son socios
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /user/invite/reject:
+    patch:
+      tags:
+        - Invitation
+      summary: Rechazar invitación
+      description: Rechaza una invitación recibida de otro usuario
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                inviterId:
+                  type: string
+                  format: ObjectId
+                  example: 60d21b4667d0d8992e610c85
+              required:
+                - inviterId
+      responses:
+        "200":
+          description: Invitación rechazada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: No autorizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Invitación no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /user/recover:
+    post:
+      tags:
+        - Recovery
+      summary: Solicitar código de recuperación de contraseña
+      description: Genera y envía un código de recuperación de contraseña por email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: john.doe@example.com
+              required:
+                - email
+      responses:
+        "200":
+          description: Código de recuperación generado y enviado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "404":
+          description: Usuario no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      tags:
+        - Recovery
+      summary: Recuperar contraseña con código
+      description: Actualiza la contraseña del usuario mediante un código de recuperación
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: john.doe@example.com
+                code:
+                  type: string
+                  example: "1234"
+                password:
+                  type: string
+                  format: password
+                  example: NewPassword123
+              required:
+                - email
+                - code
+                - password
+      responses:
+        "200":
+          description: Contraseña actualizada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Código inválido o expirado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Usuario no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Error interno del servidor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
